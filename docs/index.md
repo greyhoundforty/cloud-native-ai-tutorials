@@ -1,6 +1,29 @@
 ---
+title: Cloud Native AI Tutorials
+description: Practical tutorials for cloud native developers and AI tinkerers — Kubernetes, LLM deployment, agents, and production AI operations.
 tags:
   - home
+meta:
+  - property: og:title
+    content: Cloud Native AI Tutorials
+  - property: og:description
+    content: Practical tutorials for cloud native developers and AI tinkerers — Kubernetes, LLM deployment, agents, and production AI operations.
+  - property: og:type
+    content: website
+  - property: og:url
+    content: https://greyhoundforty-tutorials.netlify.app/
+  - property: og:image
+    content: https://greyhoundforty-tutorials.netlify.app/assets/images/social-preview.png
+  - name: twitter:card
+    content: summary_large_image
+  - name: twitter:site
+    content: "@greyhoundforty"
+  - name: twitter:title
+    content: Cloud Native AI Tutorials
+  - name: twitter:description
+    content: Practical tutorials for cloud native developers and AI tinkerers — Kubernetes, LLM deployment, agents, and production AI operations.
+  - name: twitter:image
+    content: https://greyhoundforty-tutorials.netlify.app/assets/images/social-preview.png
 ---
 
 # Cloud Native AI Tutorials

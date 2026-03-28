@@ -8,6 +8,7 @@ repo_url: https://github.com/greyhoundforty/greyhoundforty-tutorials
 
 theme:
   name: material
+  custom_dir: overrides
   palette:
     - scheme: default
       primary: indigo

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  {% if page and page.meta %}
+    {% if page.meta.meta %}
+      {% for tag in page.meta.meta %}
+        {% if tag.property is defined %}
+          <meta property="{{ tag.property }}" content="{{ tag.content }}" />
+        {% elif tag.name is defined %}
+          <meta name="{{ tag.name }}" content="{{ tag.content }}" />
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+{% endblock %}
