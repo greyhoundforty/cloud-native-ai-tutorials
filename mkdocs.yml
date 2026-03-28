@@ -1,0 +1,125 @@
+site_name: Cloud Native AI Tutorials
+site_description: Practical tutorials for cloud native developers and AI tinkerers — Kubernetes, LLM deployment, agents, and production AI operations.
+site_author: greyhoundforty
+site_url: https://greyhoundforty-tutorials.netlify.app
+
+repo_name: greyhoundforty/greyhoundforty-tutorials
+repo_url: https://github.com/greyhoundforty/greyhoundforty-tutorials
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
+  - tags:
+      tags_file: tags.md
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      normalize_issue_symbols: true
+      repo_url_shorthand: true
+      user: greyhoundforty
+      repo: greyhoundforty-tutorials
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+nav:
+  - Home: index.md
+  - Kubernetes:
+    - Overview: tutorials/kubernetes/index.md
+    - Getting Started with Claude API on K8s: tutorials/kubernetes/getting-started-claude-api-k8s.md
+    - Deploying an LLM-Backed App with Helm: tutorials/kubernetes/deploying-llm-app-helm.md
+    - Ollama on K8s with GPU Scheduling: tutorials/kubernetes/ollama-k8s-gpu-scheduling.md
+    - Agentic RAG with Claude and pgvector: tutorials/kubernetes/agentic-rag-pgvector-k8s.md
+  - Infrastructure:
+    - Overview: tutorials/infrastructure/index.md
+    - Ansible + Proxmox for AI Lab: tutorials/infrastructure/ansible-proxmox-ai-lab.md
+    - Terraform for GPU Cloud Workloads: tutorials/infrastructure/terraform-gpu-cloud.md
+  - Models:
+    - Overview: tutorials/models/index.md
+    - Fine-tuning Llama 3.2 with LoRA: tutorials/models/fine-tuning-lora-unsloth.md
+    - vLLM vs Ollama: tutorials/models/vllm-vs-ollama-inference.md
+    - Prompt Caching with Claude API: tutorials/models/claude-prompt-caching.md
+    - Model Routing with LiteLLM: tutorials/models/litellm-model-routing.md
+  - Agents:
+    - Overview: tutorials/agents/index.md
+    - Building MCP Servers: tutorials/agents/building-mcp-servers.md
+    - Multi-Agent Workflows with Claude SDK: tutorials/agents/multi-agent-claude-sdk.md
+    - AI-Powered CLI Tools with Typer: tutorials/agents/ai-cli-typer.md
+  - Operations:
+    - Overview: tutorials/operations/index.md
+    - LLM Observability with OTel + Grafana: tutorials/operations/llm-observability-otel.md
+    - Secrets Management with Vault + K8s: tutorials/operations/vault-k8s-secrets.md
+    - LLM Eval Pipelines with promptfoo: tutorials/operations/promptfoo-llm-evals.md
+  - Tags: tags.md
+  - Contributing: contributing.md
