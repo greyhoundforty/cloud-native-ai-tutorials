@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-with-mcp
+  labels:
+    app: app-with-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-with-mcp
+  template:
+    metadata:
+      labels:
+        app: app-with-mcp
+    spec:
+      volumes:
+        # Shared volume: both the app and the MCP sidecar can read these files.
+        # In production replace emptyDir with a PVC or a ConfigMap-backed volume.
+        - name: shared-docs
+          emptyDir: {}
+
+      initContainers:
+        # Populate the shared volume with sample data so the demo works immediately.
+        - name: init-docs
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Hello from Kubernetes!" > /data/hello.txt
+              echo '{"service":"api","level":"info","msg":"started","ts":"2026-01-01T00:00:00Z"}' > /data/app.log
+              mkdir -p /data/docs
+              printf "# Project Docs\n\nThis document is served by the MCP file-browser sidecar.\n" > /data/docs/readme.md
+          volumeMounts:
+            - name: shared-docs
+              mountPath: /data
+
+      containers:
+        # ── Main application container ─────────────────────────────────────
+        # Replace 'your-app:latest' with your actual application image.
+        - name: app
+          image: your-app:latest
+          ports:
+            - containerPort: 3000
+          env:
+            # The app can reach the MCP sidecar on localhost:8000
+            - name: MCP_SERVER_URL
+              value: "http://localhost:8000/mcp"
+
+        # ── MCP file-browser sidecar ───────────────────────────────────────
+        - name: mcp-file-browser
+          image: your-registry/file-browser-mcp:latest
+          ports:
+            - containerPort: 8000
+              name: mcp-http
+          env:
+            - name: MCP_TRANSPORT
+              value: streamable-http
+            - name: MCP_PORT
+              value: "8000"
+            - name: ROOT_DIR
+              value: /data
+            - name: MAX_FILE_BYTES
+              value: "1048576"   # 1 MB
+          volumeMounts:
+            - name: shared-docs
+              mountPath: /data
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /mcp
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /mcp
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+---
+# Optional: expose the MCP server outside the cluster for development.
+# Remove this Service in production and rely on in-Pod localhost routing.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-file-browser-dev
+  labels:
+    app: app-with-mcp
+spec:
+  selector:
+    app: app-with-mcp
+  ports:
+    - name: mcp-http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP

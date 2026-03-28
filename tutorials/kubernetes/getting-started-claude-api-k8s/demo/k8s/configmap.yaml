@@ -1,0 +1,10 @@
+# Non-sensitive configuration for the claude-k8s-demo service.
+# Tune CLAUDE_MODEL and MAX_TOKENS here without rebuilding the image.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claude-demo-config
+  namespace: claude-demo
+data:
+  CLAUDE_MODEL: "claude-haiku-4-5-20251001"
+  MAX_TOKENS: "512"

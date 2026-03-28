@@ -1,0 +1,13 @@
+apiVersion: v2
+name: vllm
+description: Helm chart for vLLM — high-throughput LLM inference server
+type: application
+version: 0.1.0
+appVersion: "0.4.2"
+keywords:
+  - llm
+  - inference
+  - vllm
+  - gpu
+maintainers:
+  - name: builder

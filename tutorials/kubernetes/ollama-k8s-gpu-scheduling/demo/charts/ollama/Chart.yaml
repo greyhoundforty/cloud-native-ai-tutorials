@@ -1,0 +1,18 @@
+apiVersion: v2
+name: ollama
+description: Deploy Ollama LLM server on Kubernetes with GPU scheduling
+type: application
+version: 0.1.0
+appVersion: "0.6"
+keywords:
+  - ollama
+  - llm
+  - ai
+  - gpu
+  - kubernetes
+home: https://ollama.ai
+sources:
+  - https://github.com/ollama/ollama
+maintainers:
+  - name: builder
+    email: noreply@example.com

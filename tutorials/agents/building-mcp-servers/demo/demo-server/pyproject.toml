@@ -1,0 +1,19 @@
+[project]
+name = "file-browser-mcp"
+version = "0.1.0"
+description = "An MCP server that exposes a sandboxed file-system browser tool for Claude."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp[cli]>=1.6.0",
+]
+
+[project.scripts]
+file-browser-mcp = "file_browser_mcp.server:mcp.run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/file_browser_mcp"]

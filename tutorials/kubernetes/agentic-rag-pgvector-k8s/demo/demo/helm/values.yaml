@@ -1,0 +1,108 @@
+# Default values for rag-service.
+# Override with: helm install rag-service ./helm -f my-values.yaml
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/yourorg/rag-service
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: rag.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+
+# Claude API key — set via --set or a sealed secret
+anthropic:
+  apiKey: ""          # set via --set anthropic.apiKey=sk-ant-...
+  existingSecret: ""  # or reference an existing secret
+  secretKey: "ANTHROPIC_API_KEY"
+
+# App configuration
+config:
+  claudeModel: "claude-sonnet-4-6"
+  embedModel: "all-MiniLM-L6-v2"
+  topK: "5"
+  maxTokens: "2048"
+  chunkSize: "512"
+  chunkOverlap: "64"
+
+# Bitnami postgresql sub-chart
+postgresql:
+  enabled: true
+  auth:
+    username: rag
+    password: rag
+    database: rag
+  primary:
+    initdb:
+      scripts:
+        init-pgvector.sql: |
+          CREATE EXTENSION IF NOT EXISTS vector;
+    persistence:
+      enabled: true
+      size: 10Gi
+
+# External database (used when postgresql.enabled=false)
+externalDatabase:
+  host: ""
+  port: 5432
+  user: rag
+  password: ""
+  database: rag
+  existingSecret: ""
+  secretKey: "DATABASE_URL"
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 15
+  periodSeconds: 20
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8000
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  failureThreshold: 6
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL

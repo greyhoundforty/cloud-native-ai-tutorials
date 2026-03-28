@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llm-app
+  labels:
+    # This label is required for the Vault Agent Injector webhook to
+    # intercept pod creation in this namespace.
+    # Without it, the injector annotations on the Deployment are ignored.
+    vault.hashicorp.com/inject: "true"

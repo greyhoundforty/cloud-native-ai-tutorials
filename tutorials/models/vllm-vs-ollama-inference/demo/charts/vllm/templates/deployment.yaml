@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vllm.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vllm.labels" . | nindent 4 }}
+spec:
+  # When autoscaling is enabled, HPA controls replicas — do not hard-code here.
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "vllm.selectorLabels" . | nindent 6 }}
+  # GPU pods need Recreate to avoid PVC attachment conflicts on reschedule.
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "vllm.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.gpu.runtimeClassName }}
+      runtimeClassName: {{ .Values.gpu.runtimeClassName }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      containers:
+        - name: vllm
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - python3
+            - -m
+            - vllm.entrypoints.openai.api_server
+            - --model={{ .Values.model }}
+            - --tensor-parallel-size={{ .Values.tensorParallelSize }}
+            - --max-model-len={{ .Values.maxModelLen }}
+            - --gpu-memory-utilization={{ .Values.gpuMemoryUtilization }}
+            - --dtype={{ .Values.dtype }}
+            - --host=0.0.0.0
+            - --port=8000
+            {{- if .Values.apiKey }}
+            - --api-key=$(VLLM_API_KEY)
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            # HuggingFace cache directory — backed by the PVC below.
+            - name: HF_HOME
+              value: {{ .Values.storage.mountPath }}
+            - name: TRANSFORMERS_CACHE
+              value: {{ .Values.storage.mountPath }}/hub
+            {{- if .Values.apiKey }}
+            - name: VLLM_API_KEY
+              value: {{ .Values.apiKey | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            {{- if .Values.storage.enabled }}
+            - name: hf-cache
+              mountPath: {{ .Values.storage.mountPath }}
+            {{- end }}
+          resources:
+            {{- if .Values.gpu.enabled }}
+            requests:
+              {{- toYaml .Values.resources.requests | nindent 14 }}
+              nvidia.com/gpu: {{ .Values.gpu.count }}
+            limits:
+              {{- toYaml .Values.resources.limits | nindent 14 }}
+              nvidia.com/gpu: {{ .Values.gpu.count }}
+            {{- else }}
+            requests:
+              {{- toYaml .Values.resources.requests | nindent 14 }}
+            limits:
+              {{- toYaml .Values.resources.limits | nindent 14 }}
+            {{- end }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+
+      volumes:
+        {{- if .Values.storage.enabled }}
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: {{ include "vllm.fullname" . }}-hf-cache
+        {{- end }}

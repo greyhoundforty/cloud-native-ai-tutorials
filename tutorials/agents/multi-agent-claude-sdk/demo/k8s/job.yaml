@@ -1,0 +1,139 @@
+---
+# Secret for the Anthropic API key.
+# Create it before applying: kubectl create secret generic anthropic-creds \
+#   --from-literal=api-key=$ANTHROPIC_API_KEY
+apiVersion: v1
+kind: Secret
+metadata:
+  name: anthropic-creds
+type: Opaque
+# data.api-key must be base64-encoded; populate via the kubectl command above.
+
+---
+# PersistentVolumeClaim — shared workspace between init containers (pipeline stages).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: research-workspace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard   # adjust to your cluster's default StorageClass
+
+---
+# Job — runs the three-stage pipeline as sequential init containers.
+# The main container just copies the final report to stdout so it's visible in logs.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: research-pipeline
+  labels:
+    app: research-pipeline
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+
+      # -----------------------------------------------------------------------
+      # Shared volume — all stages read/write /workspace
+      # -----------------------------------------------------------------------
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: research-workspace
+
+      # -----------------------------------------------------------------------
+      # Init containers — run sequentially; each stage blocks the next
+      # -----------------------------------------------------------------------
+      initContainers:
+
+        # Stage 1 — Planner
+        - name: planner
+          image: ghcr.io/your-org/research-pipeline:latest   # replace with your image
+          command: ["python", "pipeline.py", "--stage", "planner", "$(RESEARCH_TOPIC)"]
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anthropic-creds
+                  key: api-key
+            - name: WORKSPACE
+              value: /workspace
+            - name: RESEARCH_TOPIC
+              value: "eBPF for Kubernetes observability"   # override via Kustomize or Helm
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+
+        # Stage 2 — Researcher (needs internet access for WebSearch/WebFetch)
+        - name: researcher
+          image: ghcr.io/your-org/research-pipeline:latest
+          command: ["python", "pipeline.py", "--stage", "researcher", "$(RESEARCH_TOPIC)"]
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anthropic-creds
+                  key: api-key
+            - name: WORKSPACE
+              value: /workspace
+            - name: RESEARCH_TOPIC
+              value: "eBPF for Kubernetes observability"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+
+        # Stage 3 — Writer
+        - name: writer
+          image: ghcr.io/your-org/research-pipeline:latest
+          command: ["python", "pipeline.py", "--stage", "writer", "$(RESEARCH_TOPIC)"]
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anthropic-creds
+                  key: api-key
+            - name: WORKSPACE
+              value: /workspace
+            - name: RESEARCH_TOPIC
+              value: "eBPF for Kubernetes observability"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+
+      # -----------------------------------------------------------------------
+      # Main container — emit the finished report to stdout
+      # -----------------------------------------------------------------------
+      containers:
+        - name: report-publisher
+          image: busybox
+          command: ["sh", "-c", "cat /workspace/report.md"]
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace

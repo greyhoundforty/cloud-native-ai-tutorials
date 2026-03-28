@@ -1,0 +1,12 @@
+apiVersion: v2
+name: rag-service
+description: Agentic RAG service — Claude API + pgvector
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+dependencies:
+  - name: postgresql
+    version: "15.5.17"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled

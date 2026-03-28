@@ -1,0 +1,17 @@
+vLLM has been deployed!
+
+Model: {{ .Values.model }}
+Endpoint: http://{{ include "vllm.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}/v1
+
+Test with:
+  kubectl port-forward svc/{{ include "vllm.fullname" . }} 8000:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+  curl http://localhost:8000/v1/models
+
+OpenAI-compatible chat completions:
+  curl http://localhost:8000/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -d '{"model": "{{ .Values.model }}", "messages": [{"role": "user", "content": "Hello!"}]}'
+
+{{- if .Values.autoscaling.enabled }}
+HPA is enabled (min={{ .Values.autoscaling.minReplicas }}, max={{ .Values.autoscaling.maxReplicas }}).
+{{- end }}

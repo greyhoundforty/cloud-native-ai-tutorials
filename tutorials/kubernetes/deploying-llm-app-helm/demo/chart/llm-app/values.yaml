@@ -1,0 +1,45 @@
+# Default values for llm-app.
+
+replicaCount: 1
+
+image:
+  repository: llm-summarizer
+  pullPolicy: IfNotPresent
+  # Overridden during CI/CD with a specific SHA
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "256Mi"
+
+# Kubernetes Secret that holds ANTHROPIC_API_KEY.
+# Create it before deploying:
+#   kubectl create secret generic llm-app-secret \
+#     --from-literal=ANTHROPIC_API_KEY=<your-key>
+existingSecret:
+  name: llm-app-secret
+  key: ANTHROPIC_API_KEY
+
+# Claude model to use
+claudeModel: "claude-haiku-4-5-20251001"
+maxTokens: "256"
+
+# Liveness / readiness probes
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 10
+    periodSeconds: 15
+  readiness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10

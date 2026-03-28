@@ -1,0 +1,35 @@
+Ollama has been deployed!
+
+Model being pulled: {{ .Values.model }}
+(The init container is pulling the model now — this may take several minutes on first install.)
+
+Watch pod startup:
+  kubectl get pods -n {{ .Release.Namespace }} -w
+
+Once the pod is Running, test the API:
+
+{{- if .Values.ingress.enabled }}
+  # Via Ingress (requires DNS to point {{ .Values.ingress.host }} to your Ingress LB IP)
+  {{- if .Values.auth.enabled }}
+  curl -u '<user>:<password>' https://{{ .Values.ingress.host }}/api/tags
+  {{- else }}
+  curl https://{{ .Values.ingress.host }}/api/tags
+  {{- end }}
+{{- end }}
+
+  # Via port-forward (no Ingress needed)
+  kubectl port-forward svc/{{ include "ollama.fullname" . }} -n {{ .Release.Namespace }} 11434:11434 &
+  curl http://localhost:11434/api/generate \
+    -H "Content-Type: application/json" \
+    -d '{"model": "{{ .Values.model }}", "prompt": "Hello!", "stream": false}' \
+    | jq .response
+
+{{- if .Values.auth.enabled }}
+
+IMPORTANT: Basic auth is enabled.
+Create the auth secret if you haven't already:
+  htpasswd -nb <user> <password> > /tmp/auth
+  kubectl create secret generic {{ .Values.auth.secretName }} \
+    --from-file=auth=/tmp/auth \
+    -n {{ .Release.Namespace }}
+{{- end }}

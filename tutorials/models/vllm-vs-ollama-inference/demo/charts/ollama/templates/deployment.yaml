@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ollama.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ollama.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ollama.selectorLabels" . | nindent 6 }}
+  # Recreate avoids PVC attachment conflicts on GPU nodes.
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "ollama.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.gpu.runtimeClassName }}
+      runtimeClassName: {{ .Values.gpu.runtimeClassName }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      # Pull the model before the server starts so readiness probes pass immediately.
+      initContainers:
+        - name: model-pull
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              ollama serve &
+              SERVER_PID=$!
+              until ollama list > /dev/null 2>&1; do sleep 2; done
+              echo "Pulling {{ .Values.model }}..."
+              ollama pull {{ .Values.model }}
+              kill $SERVER_PID && wait $SERVER_PID 2>/dev/null || true
+          volumeMounts:
+            - name: ollama-models
+              mountPath: {{ .Values.storage.mountPath }}
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2"
+              {{- if .Values.gpu.enabled }}
+              nvidia.com/gpu: {{ .Values.gpu.count }}
+              {{- end }}
+
+      containers:
+        - name: ollama
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["ollama", "serve"]
+          ports:
+            - name: http
+              containerPort: 11434
+              protocol: TCP
+          env:
+            - name: OLLAMA_HOST
+              value: "0.0.0.0:11434"
+            - name: OLLAMA_MODELS
+              value: {{ .Values.storage.mountPath }}/models
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: ollama-models
+              mountPath: {{ .Values.storage.mountPath }}
+          resources:
+            {{- if .Values.gpu.enabled }}
+            requests:
+              {{- toYaml .Values.resources.requests | nindent 14 }}
+              nvidia.com/gpu: {{ .Values.gpu.count }}
+            limits:
+              {{- toYaml .Values.resources.limits | nindent 14 }}
+              nvidia.com/gpu: {{ .Values.gpu.count }}
+            {{- else }}
+            requests:
+              {{- toYaml .Values.resources.requests | nindent 14 }}
+            limits:
+              {{- toYaml .Values.resources.limits | nindent 14 }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+
+      volumes:
+        - name: ollama-models
+          persistentVolumeClaim:
+            claimName: {{ include "ollama.fullname" . }}-models

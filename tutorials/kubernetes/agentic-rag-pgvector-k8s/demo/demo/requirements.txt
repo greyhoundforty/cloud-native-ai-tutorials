@@ -1,0 +1,8 @@
+anthropic>=0.40.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+psycopg2-binary>=2.9.9
+pypdf>=4.3.0
+sentence-transformers>=3.0.0
+python-multipart>=0.0.9
+pydantic>=2.7.0

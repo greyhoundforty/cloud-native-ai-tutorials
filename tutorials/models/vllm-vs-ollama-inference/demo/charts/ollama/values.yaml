@@ -1,0 +1,87 @@
+# Default values for the Ollama Helm chart (tutorial edition).
+# Ollama is a developer-focused model runner with a simple pull/serve UX.
+# It exposes both its own API and an OpenAI-compatible /v1 endpoint.
+
+image:
+  repository: ollama/ollama
+  tag: "0.6"
+  pullPolicy: IfNotPresent
+
+# Any model name from https://ollama.com/library works here.
+# This tutorial uses llama3.2:7b to match the vLLM deployment.
+model: llama3.2:7b
+
+gpu:
+  enabled: true
+  count: 1
+  runtimeClassName: ""
+
+nodeSelector:
+  accelerator: nvidia-gpu
+
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+resources:
+  requests:
+    memory: "6Gi"
+    cpu: "2"
+  limits:
+    memory: "12Gi"
+    cpu: "4"
+
+storage:
+  storageClass: ""
+  # Llama-3.2-7B Q4 quantised ≈ 4.7 GB; add headroom for additional models.
+  size: 20Gi
+  mountPath: /root/.ollama
+
+service:
+  type: ClusterIP
+  port: 11434
+
+ingress:
+  enabled: false
+  className: nginx
+  host: ollama.example.com
+  tls:
+    enabled: false
+
+# Ollama is single-replica by design — it holds models in VRAM and does not
+# support horizontal scaling out of the box.
+replicaCount: 1
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: 11434
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  failureThreshold: 5
+
+readinessProbe:
+  httpGet:
+    path: /api/tags
+    port: 11434
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 10
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: false
+securityContext: {}
+
+serviceAccount:
+  create: false
+  name: ""
+
+# Tune concurrency and parallelism via these env vars.
+# OLLAMA_NUM_PARALLEL controls how many requests are processed simultaneously.
+extraEnv: []
+# - name: OLLAMA_NUM_PARALLEL
+#   value: "4"
+# - name: OLLAMA_MAX_LOADED_MODELS
+#   value: "1"

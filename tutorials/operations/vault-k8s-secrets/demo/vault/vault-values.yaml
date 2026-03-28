@@ -1,0 +1,51 @@
+# Vault Helm chart values for a local kind cluster tutorial
+# Source: https://helm.releases.hashicorp.com (chart: vault)
+#
+# This config runs Vault in dev mode — secrets are in-memory and the root
+# token is "root". Dev mode is fine for local tutorials; do NOT use it in
+# production.
+
+global:
+  enabled: true
+
+server:
+  dev:
+    enabled: true
+    devRootToken: "root"
+
+  # Single-replica standalone is fine for dev mode
+  standalone:
+    enabled: true
+
+  # Readiness probe — dev mode starts up quickly
+  readinessProbe:
+    enabled: true
+    path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
+
+  # Expose the UI on NodePort for easy local access
+  service:
+    type: ClusterIP
+
+  # Resource limits suitable for a local kind cluster
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+# The Vault Agent Injector is what we use to mount secrets into pods
+injector:
+  enabled: true
+  resources:
+    requests:
+      memory: 64Mi
+      cpu: 50m
+    limits:
+      memory: 128Mi
+      cpu: 250m
+
+ui:
+  enabled: true
+  serviceType: ClusterIP

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: claude-demo
+  namespace: claude-demo
+spec:
+  selector:
+    app: claude-demo
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  # ClusterIP for in-cluster access.
+  # Change to LoadBalancer when running on a cloud provider
+  # (GKE, EKS, AKS) to get a public IP automatically.
+  type: ClusterIP

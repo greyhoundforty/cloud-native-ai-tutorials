@@ -1,0 +1,163 @@
+name: LLM Eval Suite
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "promptfooconfig.yaml"
+      - ".github/workflows/eval.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "promptfooconfig.yaml"
+      - ".github/workflows/eval.yml"
+  schedule:
+    # Weekly full eval to catch silent model drift (Mondays at 9am UTC)
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      fail_threshold:
+        description: "Minimum pass rate (0-100) to succeed"
+        required: false
+        default: "90"
+
+jobs:
+  eval:
+    name: Run promptfoo eval suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install promptfoo
+        run: npm install -g promptfoo@latest
+
+      # For PRs and pushes: run the full 20-case suite.
+      # For feature branches (non-main): could limit with --filter-first-n 5
+      # to run only the smoke tier. Uncomment the step below to enable that.
+
+      # - name: Smoke eval (feature branches only)
+      #   if: github.ref != 'refs/heads/main' && github.event_name == 'push'
+      #   run: |
+      #     npx promptfoo eval \
+      #       --filter-first-n 5 \
+      #       --ci \
+      #       --output smoke-results.json \
+      #       --max-concurrency 3
+      #   env:
+      #     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Run full eval suite
+        id: eval
+        run: |
+          npx promptfoo eval \
+            --ci \
+            --output results.json \
+            --max-concurrency 3
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # If using llm-rubric with OpenAI judge (comment out if using claude-haiku judge):
+          # OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Parse eval results
+        id: parse
+        if: always()
+        run: |
+          if [ ! -f results.json ]; then
+            echo "results.json not found — eval step may have failed before writing output"
+            exit 1
+          fi
+
+          TOTAL=$(cat results.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['results']['stats']['totalTests'])")
+          PASSED=$(cat results.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['results']['stats']['successes'])")
+          FAILED=$(cat results.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['results']['stats']['failures'])")
+
+          # Calculate pass rate as integer percentage
+          PASS_RATE=$(python3 -c "print(round($PASSED / $TOTAL * 100, 1))")
+
+          echo "total=$TOTAL"       >> "$GITHUB_OUTPUT"
+          echo "passed=$PASSED"     >> "$GITHUB_OUTPUT"
+          echo "failed=$FAILED"     >> "$GITHUB_OUTPUT"
+          echo "pass_rate=$PASS_RATE" >> "$GITHUB_OUTPUT"
+
+          echo "### Eval Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Metric | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Total tests | $TOTAL |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Passed | $PASSED |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Failed | $FAILED |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Pass rate | ${PASS_RATE}% |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce pass rate threshold
+        if: always() && steps.parse.outcome == 'success'
+        run: |
+          THRESHOLD=${{ github.event.inputs.fail_threshold || '90' }}
+          PASS_RATE=${{ steps.parse.outputs.pass_rate }}
+
+          echo "Pass rate: ${PASS_RATE}% (threshold: ${THRESHOLD}%)"
+
+          python3 -c "
+          pass_rate = float('$PASS_RATE')
+          threshold = float('$THRESHOLD')
+          if pass_rate < threshold:
+              print(f'FAIL: pass rate {pass_rate}% is below threshold {threshold}%')
+              exit(1)
+          else:
+              print(f'OK: pass rate {pass_rate}% meets threshold {threshold}%')
+          "
+
+      - name: Upload eval results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results-${{ github.run_number }}
+          path: results.json
+          retention-days: 30
+
+      - name: Post eval summary to PR
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request' && always() && steps.parse.outcome == 'success'
+        with:
+          script: |
+            const passRate = '${{ steps.parse.outputs.pass_rate }}';
+            const passed = '${{ steps.parse.outputs.passed }}';
+            const failed = '${{ steps.parse.outputs.failed }}';
+            const total = '${{ steps.parse.outputs.total }}';
+            const threshold = '${{ github.event.inputs.fail_threshold || '90' }}';
+            const ok = parseFloat(passRate) >= parseFloat(threshold);
+            const icon = ok ? '✅' : '❌';
+
+            const body = `## ${icon} LLM Eval Results
+
+            | Metric | Value |
+            |--------|-------|
+            | Total tests | ${total} |
+            | Passed | ${passed} |
+            | Failed | ${failed} |
+            | Pass rate | **${passRate}%** |
+            | Threshold | ${threshold}% |
+
+            ${ok
+              ? `Pass rate meets the ${threshold}% threshold.`
+              : `**BLOCKING:** Pass rate ${passRate}% is below the ${threshold}% threshold. Fix prompt regressions before merging.`
+            }
+
+            [Download full results artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });

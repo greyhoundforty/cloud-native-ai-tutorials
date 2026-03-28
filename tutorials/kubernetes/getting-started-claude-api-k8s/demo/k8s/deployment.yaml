@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claude-demo
+  namespace: claude-demo
+  labels:
+    app: claude-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claude-demo
+  template:
+    metadata:
+      labels:
+        app: claude-demo
+    spec:
+      containers:
+        - name: claude-demo
+          image: claude-k8s-demo:latest
+          # Use Never when the image was built locally into kind:
+          #   kind load docker-image claude-k8s-demo:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          # Non-sensitive config from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: claude-demo-config
+          # Sensitive config from Secret
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: claude-demo-secret
+                  key: ANTHROPIC_API_KEY
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

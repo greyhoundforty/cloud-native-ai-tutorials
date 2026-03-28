@@ -1,0 +1,13 @@
+apiVersion: v2
+name: ollama
+description: Helm chart for Ollama — local model runner optimised for developer UX
+type: application
+version: 0.1.0
+appVersion: "0.6"
+keywords:
+  - llm
+  - inference
+  - ollama
+  - gpu
+maintainers:
+  - name: builder

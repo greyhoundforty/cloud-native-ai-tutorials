@@ -1,0 +1,54 @@
+model_list:
+  # Claude Haiku — fast, cheap; best for classification, triage, short tasks
+  - model_name: claude-haiku
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+      max_tokens: 1024
+
+  # Claude Sonnet — balanced; best for generation, summarization, reasoning
+  - model_name: claude-sonnet
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+      max_tokens: 4096
+
+  # Local Ollama — free fallback; no API key required
+  - model_name: ollama-llama3
+    litellm_params:
+      model: ollama/llama3.2
+      api_base: http://ollama:11434
+      max_tokens: 2048
+
+  # Router: cost-aware with automatic fallback
+  - model_name: smart-router
+    litellm_params:
+      model: claude-haiku          # primary: cheapest capable model
+      fallbacks:
+        - claude-sonnet            # step up when haiku hits rate limits
+        - ollama-llama3            # offline fallback when API is unreachable
+
+router_settings:
+  routing_strategy: simple-shuffle   # distribute across same-tier replicas
+  num_retries: 2
+  retry_after: 5                     # seconds before retry
+  fallbacks:
+    - claude-haiku:
+        - claude-sonnet
+    - claude-sonnet:
+        - ollama-llama3
+
+litellm_settings:
+  # Log per-model token usage and latency
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+  # Request-level timeouts
+  request_timeout: 30
+  # Budget guardrails (USD per minute, optional)
+  max_budget: 0.10
+  budget_duration: "1min"
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL    # Postgres for usage tracking (optional)
+  store_model_in_db: true

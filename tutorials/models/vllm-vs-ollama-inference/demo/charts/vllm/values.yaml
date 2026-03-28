@@ -1,0 +1,117 @@
+# Default values for the vLLM Helm chart.
+# vLLM is a high-throughput inference engine optimised for production workloads.
+# It uses continuous batching and PagedAttention to maximise GPU utilisation.
+
+image:
+  repository: vllm/vllm-openai
+  # Pin to a specific version for reproducible deployments.
+  # Check https://hub.docker.com/r/vllm/vllm-openai/tags for latest.
+  tag: "v0.4.2"
+  pullPolicy: IfNotPresent
+
+# HuggingFace model ID to serve.
+# vLLM downloads from HF Hub on first startup; use a PVC to cache weights.
+model: meta-llama/Llama-3.2-7B-Instruct
+
+# Tensor parallelism — set to the number of GPUs per node.
+# tp=1 for a single GPU, tp=2 for two GPUs, etc.
+tensorParallelSize: 1
+
+# Maximum model context length in tokens. Reduce to lower VRAM usage.
+maxModelLen: 4096
+
+# GPU memory utilisation fraction (0.0–1.0).
+# 0.90 leaves headroom for CUDA kernels; increase carefully.
+gpuMemoryUtilization: "0.90"
+
+# dtype to load weights in — "auto" selects bfloat16 on Ampere+.
+dtype: auto
+
+# vLLM exposes an OpenAI-compatible API at /v1.
+# Set this to require a static API key on every request.
+apiKey: ""
+
+gpu:
+  enabled: true
+  count: 1
+  runtimeClassName: ""
+
+nodeSelector:
+  accelerator: nvidia-gpu
+
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+resources:
+  requests:
+    memory: "8Gi"
+    cpu: "4"
+  limits:
+    memory: "24Gi"
+    cpu: "8"
+
+# Persistent storage to cache HuggingFace model weights.
+# Without this, every pod restart re-downloads the model.
+storage:
+  enabled: true
+  storageClass: ""
+  # ~14 GB for Llama-3.2-7B in bfloat16; add headroom for cache files.
+  size: 30Gi
+  mountPath: /root/.cache/huggingface
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: nginx
+  host: vllm.example.com
+  tls:
+    enabled: false
+
+# Horizontal Pod Autoscaler — scales based on CPU utilisation.
+# In practice, queue depth is a better signal, but CPU proxy works well
+# for most deployments without a custom metrics adapter.
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 60
+
+replicaCount: 1
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 120
+  periodSeconds: 30
+  failureThreshold: 5
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  failureThreshold: 10
+
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+
+serviceAccount:
+  create: false
+  name: ""
+
+# Extra environment variables passed to the vLLM container.
+# Useful for HF_TOKEN, VLLM_WORKER_MULTIPROC_METHOD, etc.
+extraEnv: []
+# - name: HF_TOKEN
+#   valueFrom:
+#     secretKeyRef:
+#       name: hf-token
+#       key: token

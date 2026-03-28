@@ -1,0 +1,161 @@
+---
+# LiteLLM Proxy Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm-proxy
+  labels:
+    app: litellm-proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: litellm-proxy
+  template:
+    metadata:
+      labels:
+        app: litellm-proxy
+    spec:
+      containers:
+        - name: litellm
+          image: ghcr.io/berriai/litellm:main-latest
+          args:
+            - "--config"
+            - "/app/config/litellm_config.yaml"
+            - "--port"
+            - "4000"
+            - "--detailed_debug"
+          ports:
+            - containerPort: 4000
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: anthropic-api-key
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: litellm-master-key
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: database-url
+                  optional: true
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: 4000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 4000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: litellm-config
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm-proxy
+spec:
+  selector:
+    app: litellm-proxy
+  ports:
+    - protocol: TCP
+      port: 4000
+      targetPort: 4000
+  type: ClusterIP
+
+---
+# ConfigMap — mount the proxy config file
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+data:
+  litellm_config.yaml: |
+    model_list:
+      - model_name: claude-haiku
+        litellm_params:
+          model: anthropic/claude-haiku-4-5-20251001
+          api_key: os.environ/ANTHROPIC_API_KEY
+          max_tokens: 1024
+      - model_name: claude-sonnet
+        litellm_params:
+          model: anthropic/claude-sonnet-4-6
+          api_key: os.environ/ANTHROPIC_API_KEY
+          max_tokens: 4096
+      - model_name: ollama-llama3
+        litellm_params:
+          model: ollama/llama3.2
+          api_base: http://ollama:11434
+          max_tokens: 2048
+      - model_name: smart-router
+        litellm_params:
+          model: claude-haiku
+          fallbacks:
+            - claude-sonnet
+            - ollama-llama3
+
+    router_settings:
+      routing_strategy: simple-shuffle
+      num_retries: 2
+      retry_after: 5
+      fallbacks:
+        - claude-haiku:
+            - claude-sonnet
+        - claude-sonnet:
+            - ollama-llama3
+
+    litellm_settings:
+      request_timeout: 30
+
+    general_settings:
+      master_key: os.environ/LITELLM_MASTER_KEY
+
+---
+# HorizontalPodAutoscaler — scale on CPU; tune for your traffic
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: litellm-proxy
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: litellm-proxy
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75

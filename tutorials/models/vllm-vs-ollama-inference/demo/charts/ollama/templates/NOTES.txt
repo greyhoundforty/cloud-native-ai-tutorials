@@ -1,0 +1,16 @@
+Ollama has been deployed!
+
+Model: {{ .Values.model }}
+Endpoint: http://{{ include "ollama.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+Test with:
+  kubectl port-forward svc/{{ include "ollama.fullname" . }} 11434:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+
+Native API:
+  curl http://localhost:11434/api/generate \
+    -d '{"model": "{{ .Values.model }}", "prompt": "Hello!", "stream": false}'
+
+OpenAI-compatible API (v1):
+  curl http://localhost:11434/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -d '{"model": "{{ .Values.model }}", "messages": [{"role": "user", "content": "Hello!"}]}'

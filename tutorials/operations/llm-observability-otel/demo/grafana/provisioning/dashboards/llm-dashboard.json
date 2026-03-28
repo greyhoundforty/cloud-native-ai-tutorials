@@ -1,0 +1,139 @@
+{
+  "title": "LLM Observability",
+  "uid": "llm-observability",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(llm_llm_request_duration_seconds_count, model)",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "label": "Model"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by(model) (rate(llm_llm_request_duration_seconds_count{model=~\"$model\"}[2m]))",
+          "legendFormat": "{{model}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Latency — p50 / p95 (seconds)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by(le, model) (rate(llm_llm_request_duration_seconds_bucket{model=~\"$model\"}[5m])))",
+          "legendFormat": "p50 {{model}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by(le, model) (rate(llm_llm_request_duration_seconds_bucket{model=~\"$model\"}[5m])))",
+          "legendFormat": "p95 {{model}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Token Burn Rate (tokens/min)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by(model) (rate(llm_llm_usage_input_tokens_sum{model=~\"$model\"}[2m])) * 60",
+          "legendFormat": "input {{model}}"
+        },
+        {
+          "expr": "sum by(model) (rate(llm_llm_usage_output_tokens_sum{model=~\"$model\"}[2m])) * 60",
+          "legendFormat": "output {{model}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Error Rate (errors/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by(error_type) (rate(llm_llm_errors_total[2m]))",
+          "legendFormat": "{{error_type}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Avg Tokens per Request",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 16, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0 }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(llm_llm_usage_input_tokens_sum[5m])) / sum(rate(llm_llm_usage_input_tokens_count[5m]))",
+          "legendFormat": "Avg Input Tokens"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Avg Output Tokens per Request",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 16, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0 }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(llm_llm_usage_output_tokens_sum[5m])) / sum(rate(llm_llm_usage_output_tokens_count[5m]))",
+          "legendFormat": "Avg Output Tokens"
+        }
+      ]
+    }
+  ]
+}

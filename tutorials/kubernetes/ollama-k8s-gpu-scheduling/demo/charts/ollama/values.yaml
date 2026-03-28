@@ -1,0 +1,126 @@
+# Default values for the Ollama Helm chart.
+# Override these values at install time with --set or -f your-values.yaml
+
+image:
+  repository: ollama/ollama
+  tag: "0.6"
+  pullPolicy: IfNotPresent
+
+# The model to pull on pod startup (via init container).
+# Any model name from https://ollama.ai/library works here.
+# Examples: llama3, llama3:8b, llama3:70b, mistral, gemma3, phi3
+model: llama3
+
+# GPU configuration
+gpu:
+  # Set to false for CPU-only deployments (dev/test environments)
+  enabled: true
+  # Number of GPUs to request per pod
+  count: 1
+  # Override the runtime class (e.g., "nvidia" for NVIDIA GPU Operator installs)
+  # Leave empty to use the cluster default
+  runtimeClassName: ""
+
+# Node selector: target nodes labelled with accelerator=nvidia-gpu
+nodeSelector:
+  accelerator: nvidia-gpu
+
+# Toleration for GPU nodes that have the nvidia taint
+# Remove if your GPU nodes are not tainted
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+# Pod resource requests and limits
+# Memory: Llama 3 8B needs ~6 GB VRAM; 70B needs ~48 GB VRAM
+resources:
+  requests:
+    memory: "6Gi"
+    cpu: "2"
+  limits:
+    memory: "12Gi"
+    cpu: "4"
+
+# Persistent storage for model weights
+storage:
+  # StorageClass to use. Empty string uses the cluster default StorageClass.
+  storageClass: ""
+  # Size should accommodate all models you plan to host.
+  # Llama 3 8B  ≈ 4.7 GB
+  # Llama 3 70B ≈ 39 GB
+  # Add headroom for multiple models.
+  size: 20Gi
+  # Mount path inside the container (must match Ollama's default)
+  mountPath: /root/.ollama
+
+service:
+  type: ClusterIP
+  port: 11434
+
+ingress:
+  enabled: true
+  # Ingress class name — change to "nginx" if using NGINX Ingress Controller
+  className: nginx
+  # Public hostname for the Ollama API
+  host: ollama.example.com
+  # TLS configuration (requires cert-manager or pre-existing TLS secret)
+  tls:
+    enabled: false
+    # secretName: ollama-tls  # cert-manager will create this if you use the annotation below
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+
+# Basic authentication via NGINX Ingress
+# You must create the 'ollama-basic-auth' secret manually before deploying:
+#   htpasswd -nb <user> <password> > /tmp/auth
+#   kubectl create secret generic ollama-basic-auth --from-file=auth=/tmp/auth -n <namespace>
+auth:
+  enabled: true
+  secretName: ollama-basic-auth
+
+# Number of pod replicas.
+# NOTE: Each replica requires its own PVC for model storage.
+# Use replicas > 1 only for throughput scaling with smaller models.
+replicaCount: 1
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: false
+
+# Container security context
+securityContext: {}
+
+# Liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /
+    port: 11434
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  failureThreshold: 5
+
+readinessProbe:
+  httpGet:
+    path: /api/tags
+    port: 11434
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 10
+
+# Extra environment variables injected into the Ollama container
+extraEnv: []
+# - name: OLLAMA_NUM_PARALLEL
+#   value: "2"
+# - name: OLLAMA_MAX_LOADED_MODELS
+#   value: "1"
+
+# Pod annotations
+podAnnotations: {}
+
+# Service account
+serviceAccount:
+  create: false
+  name: ""

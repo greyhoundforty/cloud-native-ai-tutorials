@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault-demo
+  namespace: llm-app
+  labels:
+    app: vault-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vault-demo
+  template:
+    metadata:
+      labels:
+        app: vault-demo
+      annotations:
+        # ── Vault Agent Injector annotations ──────────────────────────────────
+        # Tell the injector to inject a Vault Agent sidecar into this pod.
+        vault.hashicorp.com/agent-inject: "true"
+
+        # Which Vault auth role to use (must match the role created in setup.sh)
+        vault.hashicorp.com/role: "llm-app"
+
+        # Secret to inject: the annotation key suffix becomes the filename
+        # under /vault/secrets/. Here: /vault/secrets/anthropic-key
+        vault.hashicorp.com/agent-inject-secret-anthropic-key: "secret/data/llm/anthropic"
+
+        # Template: extract just the api_key value from the JSON response.
+        # The file will contain a single line: sk-ant-...
+        vault.hashicorp.com/agent-inject-template-anthropic-key: |
+          {{- with secret "secret/data/llm/anthropic" -}}
+          {{ .Data.data.api_key }}
+          {{- end }}
+
+        # Keep the agent running so it can renew the lease; set to "false"
+        # if you want a one-shot init container instead.
+        vault.hashicorp.com/agent-pre-populate-only: "false"
+
+        # Log level for the injected agent (debug | info | warn | error)
+        vault.hashicorp.com/log-level: "info"
+    spec:
+      serviceAccountName: vault-demo
+
+      containers:
+        - name: app
+          # Replace with your actual image after `docker build` + load into kind
+          image: vault-demo:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            # Tell the app where to find the injected secret file
+            - name: VAULT_SECRET_PATH
+              value: /vault/secrets/anthropic-key
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          # The app is read-only; only /vault/secrets is writable (by the sidecar)
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        # Required for a read-only root filesystem — uvicorn needs /tmp
+        - name: tmp
+          emptyDir: {}

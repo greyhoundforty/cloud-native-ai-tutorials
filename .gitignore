@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+.ruff_cache/
+.DS_Store
+*.egg-info/
+dist/
+build/
